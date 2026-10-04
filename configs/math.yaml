@@ -1,0 +1,48 @@
+# Run from the sibling LLaMA-Factory directory; assumes 8 GPUs.
+### model
+model_name_or_path: Qwen/Qwen3-4B-Base
+trust_remote_code: true
+flash_attn: sdpa
+enable_liger_kernel: false
+
+### method
+stage: sft
+do_train: true
+finetuning_type: full
+deepspeed: ../P3D/configs/ds_z3.json
+use_ppd_loss: true
+ppd_delta: 0.30
+loss_topk: 200
+use_dft_loss: false
+use_eaft_loss: false
+use_asft_loss: false
+label_smoothing_factor: 0.0
+
+### dataset
+dataset_dir: data/p3d
+dataset: math_sft
+template: qwen3
+cutoff_len: 4096
+overwrite_cache: true
+preprocessing_num_workers: 16
+dataloader_num_workers: 16
+
+### output
+output_dir: saves/p3d/qwen3_4b_math_d030
+logging_steps: 10
+save_steps: 250
+plot_loss: true
+overwrite_output_dir: false
+save_only_model: false
+report_to: tensorboard
+
+### train
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 8
+learning_rate: 1.0e-5
+num_train_epochs: 3.0
+lr_scheduler_type: cosine
+warmup_steps: 60
+bf16: true
+gradient_checkpointing: true
+ddp_timeout: 180000000
