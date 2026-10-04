@@ -3,7 +3,7 @@
 [Overview](#overview) · [Code](#code) · [Quick start](#quick-start) · [Parameters](#parameters) · [Examples](#examples)
 
 <p align="center">
-  <img src="method.pdf" alt="P³D overview: learning from demonstrations while retaining useful prior structure for subsequent reinforcement learning" width="100%">
+  <img src="method.png" alt="P³D overview: learning from demonstrations while retaining useful prior structure for subsequent reinforcement learning" width="100%">
 </p>
 
 <p align="center">
