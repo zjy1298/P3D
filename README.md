@@ -1,27 +1,110 @@
-<h1 align="center">P<sup>3</sup>D</h1>
+# Sharp at the Peak, Rich in the Prior
 
-<p align="center">
-  <strong>Peak-Preserving Prior Distribution</strong><br>
-  Distributional supervision for supervised fine-tuning
-</p>
+**P³D — Peak-Preserving Prior Distribution for RL-Ready Large Language Models**
 
-<p align="center">
-  <a href="#quick-start">Quick start</a> &nbsp;·&nbsp;
-  <a href="#parameters">Parameters</a> &nbsp;·&nbsp;
-  <a href="#examples">Examples</a> &nbsp;·&nbsp;
-  <a href="#license">License</a>
-</p>
+[Background](#background) · [Method](#method) · [Code](#code) · [Quick start](#quick-start) · [Parameters](#parameters) · [Examples](#examples)
 
----
+P³D is a supervised fine-tuning objective that learns from demonstrated tokens
+while retaining the student's preferences among alternative continuations.
+It constructs soft targets from the current student's own predictions, balancing
+**acquisition of demonstrated behavior** with **retention of useful prior structure**
+for subsequent reinforcement learning.
 
-P³D constructs a soft supervision target from the current student's predictions:
-it promotes the demonstrated token while preserving relative probabilities among
-non-target alternatives on a selected top-K support. The target is detached from
-the gradient, and training reuses the student's forward pass.
+**[View the method figure · PDF](method.pdf)**
 
-**One loss, two integration snippets.** Add P³D to LLaMA-Factory using the files
-below, then select a training configuration. The code retains the `ppd` parameter
-names used in the original implementation.
+<!-- GitHub renders PDFs on their file pages, not as inline README images.
+When a preview is available, replace the PDF link above with:
+[![P³D method overview](method.png)](method.pdf)
+Keep method.pdf as the full-resolution figure.
+-->
+
+## Background
+
+Pretrained language models already encode broad knowledge and multiple plausible
+reasoning paths. In an SFT-to-RL pipeline, supervised fine-tuning has two roles:
+learning the demonstrated behavior and providing an initialization from which
+reinforcement learning can explore useful alternatives.
+
+Conventional SFT supervises each position with a one-hot target. It promotes the
+demonstrated token but does not specify which relationships among alternative
+tokens should survive. This can narrow the distribution available to later RL.
+Smoothing or entropy regularization can soften that concentration, yet the amount
+of uncertainty alone does not identify which alternatives to preserve.
+
+P³D treats this as a **supervision-target design problem**: demonstrations identify
+what to learn, while the student's predictive distribution supplies the relative
+preferences to retain.
+
+## Method
+
+Two principles guide the construction of the supervision target:
+
+| Principle | Role in the target |
+| :--- | :--- |
+| **Greedy Guarantee · Acquisition** | Promote the demonstrated token so that it dominates the supervisory distribution. |
+| **Minimal Intervention · Retention** | Preserve relative preferences among non-target tokens while making the adjustment needed to learn the demonstrated choice. |
+
+At each response position, P³D performs three steps:
+
+1. **Read the current student distribution.** Use a stop-gradient copy of the
+   student's predictions at the demonstration prefix as the reference.
+2. **Construct a target that preserves probability ratios.** Raise the
+   demonstrated-token probability to a dominance floor controlled by a margin
+   `δ`, and rescale all non-target probabilities by the same factor.
+3. **Fit the detached target.** Train with soft cross-entropy, reusing the
+   student's forward-pass logits. No teacher probability vectors, separate
+   teacher model, or additional entropy or reference-model KL penalty is needed.
+
+The implementation constructs and fits the target on a renormalized top-K support
+(`K=200`), replacing the last selected token with the demonstrated token when it
+is missing. The dominance and ratio-preservation properties concern the
+**supervisory target**; their effects on trained models are evaluated empirically.
+
+<details>
+<summary>The target distribution in equations</summary>
+
+Let $P$ be the detached current-student distribution on the selected support,
+$y^\star$ the demonstrated token, $p^\star=P(y^\star)$, and
+$m=\max_{y\ne y^\star}P(y)$. The dominance boundary and target probability are
+
+$$
+b=\frac{m}{1-p^\star+m},\qquad
+c=\max\{p^\star,b+\delta\}.
+$$
+
+With numerical clipping applied to $c$, the target is
+
+$$
+Q(y)=
+\begin{cases}
+c, & y=y^\star,\\[3pt]
+\dfrac{1-c}{1-p^\star}P(y), & y\ne y^\star.
+\end{cases}
+$$
+
+Every non-target probability receives the same multiplier, preserving their
+ratios. At zero margin, the construction minimizes KL divergence **within the
+uniform-rescaling family** subject to dominance. The positive margin is a
+practical control on supervision strength. The code retains the original `1e-6`
+numerical guards; both target construction and soft cross-entropy use the same
+selected support.
+
+</details>
+
+### What the paper studies
+
+The paper evaluates Qwen3-4B, Qwen3-8B, and Llama-3-8B on mathematical and medical
+reasoning, both after SFT and after subsequent GRPO. It examines task acquisition
+and prior retention through greedy accuracy, sampled performance, general
+capabilities, token-level distribution probes, and training dynamics.
+The central contribution is the construction of distributional supervision that
+combines demonstrated-token dominance with preservation of non-target preferences.
+
+## Code
+
+The release provides the P³D loss, two LLaMA-Factory integration snippets, and
+SFT configurations. The code retains the `ppd` parameter names used in the
+original implementation.
 
 | File | Purpose |
 | :--- | :--- |
@@ -31,8 +114,8 @@ names used in the original implementation.
 | [configs/](configs/) | Mathematics, medical, and DeepSpeed configurations |
 | [requirements.txt](requirements.txt) | Recorded SFT environment versions |
 
-> **Release scope:** Loss implementation, integration snippets, and SFT examples.
-> Models, datasets, GRPO, and the complete evaluation pipeline are not included.
+> **Release scope:** The code below covers the SFT implementation. Models,
+> training datasets, GRPO, and the complete evaluation pipeline are not included.
 
 ## Quick start
 
